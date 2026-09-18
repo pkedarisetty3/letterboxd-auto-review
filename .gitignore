@@ -1,0 +1,15 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+*.egg-info/
+
+drafts/*.md
+!drafts/.gitkeep
+
+notes/*.md
+!notes/example_notes.md
+
+data/raw/letterboxd_export/
+data/reviews.json
