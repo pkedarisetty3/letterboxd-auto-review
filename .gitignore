@@ -6,7 +6,11 @@ __pycache__/
 *.egg-info/
 
 drafts/*.md
+drafts/*-letterboxd-copy.html
 !drafts/.gitkeep
+
+feedback/*.jsonl
+!feedback/.gitkeep
 
 notes/*.md
 !notes/example_notes.md

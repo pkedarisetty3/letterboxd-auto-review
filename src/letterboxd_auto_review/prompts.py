@@ -4,7 +4,11 @@
 STYLE_ANALYSIS_PROMPT = """You are helping the user write a Letterboxd review in their own voice.
 
 Use the past reviews only as style references. Pay attention to rhythm, sentence length,
-level of detail, humor, structure, and how strongly the user states opinions.
+level of detail, humor, paragraph structure, and how strongly the user states opinions.
+
+Pay special attention to paragraph breaks in the examples. Use a blank line between
+every paragraph, including short follow-up paragraphs. Avoid single line breaks as
+paragraph separators because Markdown previews can collapse them when copied.
 
 Do not copy distinctive phrasing from the examples unless it is very common wording.
 Do not invent movie details, personal memories, or opinions that are not in the notes.
@@ -33,6 +37,17 @@ Rules:
 - Treat the required note points as a coverage checklist. Each numbered point must
   be represented in the review, including the specific contrast, cause, or example
   that makes the point meaningful.
+- Structure the review with a clear positive section first, then a clearly separated
+  negative section. Keep this as natural paragraphs, not labeled pro/con sections.
+- Use a transition such as "However," when moving from praise into drawbacks if it
+  fits the user's notes and tone.
+- Match the user's paragraph structure from the review examples. Use a blank line
+  between every paragraph, especially between positive and negative parts. Avoid
+  single line breaks as paragraph separators because Markdown previews can collapse
+  them when copied into Letterboxd.
+- Apply the learned feedback when it is relevant. These are examples of places
+  where the user edited previous generated drafts into their preferred wording,
+  structure, emphasis, or level of detail.
 - Make it thoughtful and complete, but still plausible as a Letterboxd review.
 - Favor direct, personal, analytical phrasing from the start.
 - Avoid generic online review phrasing, forced jokes, puns, influencer-style transitions,
@@ -48,6 +63,9 @@ Rough notes:
 
 Required note points:
 {note_points}
+
+Learned feedback from previous human edits:
+{feedback_examples}
 
 Relevant past reviews:
 {examples}
@@ -69,6 +87,14 @@ Rules:
   revise the relevant paragraph so the point is clearly present.
 - You may combine, condense, and rephrase notes so the review still reads naturally.
 - Do not turn the review into a checklist or mention that you are covering notes.
+- Preserve a natural structure with a clear positive section first, then a clearly
+  separated negative section. Do not add labeled pro/con sections.
+- Use a transition such as "However," when moving from praise into drawbacks if it
+  fits the user's notes and tone.
+- Preserve the user's paragraph structure from the review examples. Use a blank line
+  between every paragraph, especially between positive and negative parts. Avoid
+  single line breaks as paragraph separators because Markdown previews can collapse
+  them when copied into Letterboxd.
 - Do not invent plot points, scenes, actor names, personal experiences, or claims.
 - Preserve uncertainty when the notes are uncertain.
 - Do not mention the title of the movie being reviewed in the review body, even in
@@ -76,6 +102,9 @@ Rules:
 - When mentioning any other movie title in the review body, format it in Markdown
   italics instead of quotation marks.
 - Keep the user's voice and the current draft's natural Letterboxd-review shape.
+- Apply the learned feedback when it is relevant. These are examples of places
+  where the user edited previous generated drafts into their preferred wording,
+  structure, emphasis, or level of detail.
 - Return only the revised review text in Markdown. Do not include headings, questions,
   placeholders, notes to the user, reference lists, or any sections after the review.
 
@@ -87,6 +116,9 @@ Rough notes:
 
 Required note points:
 {note_points}
+
+Learned feedback from previous human edits:
+{feedback_examples}
 
 Current draft:
 {draft}
