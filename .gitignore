@@ -5,6 +5,7 @@ __pycache__/
 .DS_Store
 *.egg-info/
 
+drafts/**/*.md
 drafts/*.md
 drafts/*-letterboxd-copy.html
 !drafts/.gitkeep
@@ -17,3 +18,13 @@ notes/*.md
 
 data/raw/letterboxd_export/
 data/reviews.json
+
+# Interrupted atomic saves contain the same private notes/reviews as final files.
+notes/*.tmp
+drafts/*.tmp
+
+# Public profile sync state and merged personal history stay on this laptop.
+data/letterboxd_sync.json
+data/diary.json
+data/*.tmp
+data/backups/

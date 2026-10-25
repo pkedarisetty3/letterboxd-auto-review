@@ -4,6 +4,8 @@ import argparse
 import re
 from pathlib import Path
 
+from letterboxd_auto_review.movie_files import title_from_filename
+
 from letterboxd_auto_review.draft_review import format_copy_preview_html
 
 
@@ -16,8 +18,7 @@ def parse_draft_title(markdown: str, path: Path) -> str:
 
     # Keep the command useful even if the heading was accidentally deleted.
     # The generated filenames end in -review.md, so remove that suffix first.
-    fallback = path.stem.removesuffix("-review").replace("-", " ").strip()
-    return fallback.title() or "Review"
+    return title_from_filename(path)
 
 
 def parse_draft_rating(markdown: str) -> str | None:

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173e36">
+  <title>After the credits · Review desk</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a href="/" class="brand"><span class="brand-mark">a<span>·</span>c</span><span>after the credits<small>YOUR PERSONAL REVIEW DESK</small></span></a>
+    <button id="phone-button" class="quiet light">↗ <span>Phone setup</span></button>
+  </header>
+  <section id="pairing" class="pairing" hidden>
+    <p class="eyebrow">YOUR LAPTOP, ON YOUR PHONE</p><h1>Welcome to your review desk.</h1>
+    <p>Open Phone setup on your laptop, then enter its six-digit code here.</p>
+    <form id="pair-form"><label for="pair-code">Pairing code</label><input id="pair-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required><button class="primary">Connect to laptop</button></form>
+    <p id="pair-error" role="alert"></p>
+  </section>
+  <div id="app" class="layout" hidden>
+    <aside class="library">
+      <div class="library-heading"><div><p class="eyebrow">THE COLLECTION</p><h2>Your movie journal<span id="count"></span></h2></div><button id="new-button" class="new-icon" aria-label="New review">＋</button></div>
+      <section class="sync-card" aria-label="Letterboxd sync">
+        <div class="sync-heading"><span class="eyebrow">LETTERBOXD</span><span id="sync-account"></span></div>
+        <form id="sync-connect" hidden><label for="sync-username">Username</label><div><input id="sync-username" placeholder="Your Letterboxd username" autocomplete="off" maxlength="40" required><button class="secondary">Connect</button></div></form>
+        <button id="sync-button" class="secondary" hidden>↻ Sync Letterboxd</button>
+        <p id="sync-status" role="status" aria-live="polite">Checking saved history…</p>
+      </section>
+      <div class="collection-tabs" role="tablist" aria-label="Collection source"><button id="writing-list-tab" role="tab" aria-selected="true" aria-controls="movies">My writing</button><button id="watched-list-tab" role="tab" aria-selected="false" aria-controls="movies">Watched</button></div>
+      <label class="sr-only" for="search">Search movies</label><input id="search" type="search" placeholder="Search your movies…">
+      <div class="sort-label"><span>WATCH DATE</span><span>NEWEST FIRST ↓</span></div>
+      <nav id="movies" aria-label="Movie library"></nav>
+      <p id="watched-hint" class="watched-hint" hidden>Choose a viewing to start notes. Recent activity syncs from Letterboxd; older history comes from your saved export.</p>
+      <p class="library-footer">A place for what stayed with you.</p>
+    </aside>
+    <main id="workspace">
+      <div class="workspace-top"><p class="eyebrow">NOTES → DRAFT → LETTERBOXD</p><span class="local-badge"><i></i> Saved on your laptop</span></div>
+      <div class="page-heading"><div><p id="viewing-label" class="muted">A fresh page</p><h1 id="page-title">What did you watch?</h1></div><span id="draft-badge" class="draft-badge">NEW VIEWING</span></div>
+      <section class="editor-card" aria-label="Review editor">
+        <div class="metadata">
+          <label class="title-field">Movie title<input id="title" placeholder="e.g. Sliding Doors" maxlength="200" required></label>
+          <label>Watched<input id="watched" type="date" required></label>
+          <label>Your rating<select id="rating"><option value="">Not rated</option><option value="0">0</option><option value="0.5">½ ★</option><option value="1">1 ★</option><option value="1.5">1½ ★</option><option value="2">2 ★</option><option value="2.5">2½ ★</option><option value="3">3 ★</option><option value="3.5">3½ ★</option><option value="4">4 ★</option><option value="4.5">4½ ★</option><option value="5">5 ★</option></select></label>
+        </div>
+        <div class="tabbar" role="tablist" aria-label="Writing stage"><button id="notes-tab" role="tab" aria-selected="true" aria-controls="notes-panel">01 <span>Your notes</span></button><button id="review-tab" role="tab" aria-selected="false" aria-controls="review-panel">02 <span>Your review</span></button><span id="save-state" role="status" aria-live="polite">Edits save automatically</span></div>
+        <div id="notes-panel" role="tabpanel" aria-labelledby="notes-tab">
+          <div class="editor-intro"><h3>Catch the thoughts before they fade.</h3><p>Fragments, strong opinions, a scene you keep thinking about. Write it your way.</p></div>
+          <label for="notes" class="sr-only">Your movie notes</label><textarea id="notes" spellcheck="true" placeholder="What stayed with you?"></textarea>
+          <div class="actionbar"><span class="action-hint">Edits save automatically</span><div><span class="action-hint">Uses your configured model</span><button id="generate" class="primary">Generate review <span>↗</span></button></div></div>
+        </div>
+        <div id="review-panel" role="tabpanel" aria-labelledby="review-tab" hidden>
+          <div class="editor-intro"><h3>Make it sound like you.</h3><p>Edit freely. Your original generated draft stays saved for feedback.</p></div>
+          <div id="no-review" class="empty-review"><span>✎</span><h3>Your next review starts with a few notes.</h3><p>Add your thoughts, then generate a first draft.</p><button id="back-to-notes" class="secondary">Write your notes</button></div>
+          <label for="review" class="sr-only">Editable review</label><textarea id="review" spellcheck="true" hidden></textarea>
+          <div id="review-actions" class="actionbar" hidden><div><button id="feedback" class="text-button">Learn from my edits</button></div><button id="copy" class="primary">Copy for Letterboxd ↗</button></div>
+        </div>
+      </section>
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+      <footer class="workspace-footer"><span>Your thoughts. Your voice. A little help with the first draft.</span><span>AFTER THE CREDITS</span></footer>
+    </main>
+  </div>
+  <dialog id="phone-dialog"><button id="close-phone" class="dialog-close" aria-label="Close phone setup">×</button><p class="eyebrow">TAKE YOUR NOTES TO THE SOFA</p><h2>Open this on your phone.</h2><p>Connect your phone to the same Wi-Fi as this laptop. Type this address into its browser:</p><div id="phone-addresses" class="addresses"></div><p>Enter this pairing code when prompted:</p><strong id="phone-code" class="pair-code"></strong><p class="muted">Bookmark the page for next time. Keep this laptop awake and the launcher window open. The code changes when you restart the app.</p></dialog>
+  <dialog id="copy-dialog"><button id="close-copy" class="dialog-close" aria-label="Close copy text">×</button><h2>Ready for Letterboxd.</h2><p>Your browser needs a manual copy. Select the text below, copy it, then paste into Letterboxd.</p><label class="sr-only" for="copy-text">Formatted review to copy</label><textarea id="copy-text" readonly></textarea><button id="select-copy" class="primary">Select all text</button></dialog>
+</body>
+</html>

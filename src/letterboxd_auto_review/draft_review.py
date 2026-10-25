@@ -16,6 +16,9 @@ from letterboxd_auto_review.feedback import (
     format_feedback_examples,
     load_feedback_records,
 )
+from letterboxd_auto_review.movie_files import (
+    DEFAULT_DIARY_PATH, movie_file_stem, parse_watched_date, resolve_watched_date, with_watched_date,
+)
 from letterboxd_auto_review.prompts import (
     COVERAGE_REVISION_PROMPT,
     DRAFT_REVIEW_PROMPT,
@@ -156,7 +159,7 @@ def extract_required_note_points(notes: str) -> list[str]:
         label_match = re.match(r"^([A-Za-z /]+):\s*(.*)$", line)
         if label_match:
             label = label_match.group(1).strip().lower()
-            if label in {"movie", "rating", "title"}:
+            if label in {"movie", "rating", "title", "watched"}:
                 continue
             # Skip empty template labels like `What I liked:`. If a line has a
             # label plus real content, keep only the content after the colon.
@@ -393,13 +396,9 @@ def normalize_review_paragraphs(review_text: str) -> str:
 
 
 def format_letterboxd_review_text(review_text: str) -> str:
-    """Create the body that can be pasted directly into Letterboxd.
+    """Provide clean text for editors that do not accept rich clipboard data."""
 
-    Keep Markdown emphasis in place so Letterboxd can render movie-title italics
-    after the text is pasted into the review field.
-    """
-
-    return normalize_review_paragraphs(review_text)
+    return markdown_review_to_plain_text(review_text)
 
 
 def fenced_plain_text(text: str) -> str:
@@ -429,21 +428,18 @@ def markdown_review_to_html(review_text: str) -> str:
     return "\n".join(paragraphs)
 
 
-def markdown_review_to_inline_html(review_text: str) -> str:
-    """Render review Markdown as inline HTML separated by explicit blank lines.
+def markdown_review_to_clipboard_html(review_text: str) -> str:
+    """Copy paragraph blocks and match the Letterboxd app's editor text color.
 
-    Letterboxd's editor can flatten pasted paragraph tags into single line breaks.
-    Using literal break tags between paragraphs gives its paste handler the blank
-    lines we want while still preserving inline italics.
+    Empty paragraph blocks provide real blank lines even when the receiving
+    editor removes paragraph margins. Literal newlines also keep text separated
+    if a receiving editor strips the HTML tags when saving.
     """
 
-    paragraphs = []
-    for paragraph in normalize_review_paragraphs(review_text).split("\n\n"):
-        escaped = html.escape(paragraph)
-        escaped = re.sub(r"\*\*([^*\n]+)\*\*", r"<strong>\1</strong>", escaped)
-        escaped = re.sub(r"\*([^*\n]+)\*", r"<em>\1</em>", escaped)
-        paragraphs.append(escaped)
-    return "<br><br>\n".join(paragraphs)
+    paragraphs = markdown_review_to_html(review_text)
+    paragraphs = paragraphs.replace("</p>\n<p>", "</p>\n\n<p><br></p>\n\n<p>")
+    # This is the text color in the Mac app's own rich-editor stylesheet.
+    return f'<div style="color: #99aabb;">{paragraphs}</div>'
 
 
 def markdown_review_to_plain_text(review_text: str) -> str:
@@ -455,49 +451,18 @@ def markdown_review_to_plain_text(review_text: str) -> str:
     return plain
 
 
-def italic_unicode_char(character: str) -> str:
-    """Return a mathematical italic version of a basic Latin letter."""
-
-    if "A" <= character <= "Z":
-        return chr(ord("𝐴") + (ord(character) - ord("A")))
-    if "a" <= character <= "z":
-        # Mathematical italic small h is not contiguous with the rest of the
-        # alphabet, so handle it explicitly.
-        if character == "h":
-            return "ℎ"
-        return chr(ord("𝑎") + (ord(character) - ord("a")))
-    return character
-
-
-def markdown_review_to_unicode_text(review_text: str) -> str:
-    """Render review Markdown as plain text with visual Unicode italics.
-
-    Letterboxd's normal paste path prefers rich HTML when it exists, but its
-    sanitizer collapses paragraph spacing. Copying plain text preserves blank
-    lines, and Unicode italics keep simple title emphasis visible.
-    """
-
-    def replace_italic(match: re.Match[str]) -> str:
-        return "".join(italic_unicode_char(character) for character in match.group(1))
-
-    text = normalize_review_paragraphs(review_text)
-    text = re.sub(r"\*\*([^*\n]+)\*\*", r"\1", text)
-    text = re.sub(r"\*([^*\n]+)\*", replace_italic, text)
-    return text
-
-
 def format_copy_preview_html(movie: str, rating: object, review_text: str) -> str:
-    """Create an HTML page whose copy button preserves rich formatting.
+    """Copy real formatting with readable plain text as a fallback.
 
-    The copy button writes plain text directly because Letterboxd's normal rich
-    paste path collapses paragraph spacing. Movie-title italics are converted to
-    Unicode italic characters so visual emphasis survives in the plain text.
+    Editors choose the clipboard format they support. HTML belongs only in the
+    rich format; the plain version must never contain tags or escaped punctuation.
     """
 
     rating_label = html.escape(format_reference_rating(rating))
     movie_label = html.escape(movie)
     review_html = markdown_review_to_html(review_text)
-    clipboard_plain_text = markdown_review_to_unicode_text(review_text)
+    clipboard_plain_text = format_letterboxd_review_text(review_text)
+    clipboard_html = markdown_review_to_clipboard_html(review_text)
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -635,8 +600,16 @@ def format_copy_preview_html(movie: str, rating: object, review_text: str) -> st
     const button = document.getElementById("copy-button");
     const status = document.getElementById("status");
     const clipboardPlainText = {json.dumps(clipboard_plain_text)};
+    const clipboardHtml = {json.dumps(clipboard_html)};
 
     async function writeCleanClipboard() {{
+      if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {{
+        await navigator.clipboard.write([new ClipboardItem({{
+          "text/plain": new Blob([clipboardPlainText], {{ type: "text/plain" }}),
+          "text/html": new Blob([clipboardHtml], {{ type: "text/html" }}),
+        }})]);
+        return true;
+      }}
       if (navigator.clipboard && navigator.clipboard.writeText) {{
         await navigator.clipboard.writeText(clipboardPlainText);
         return true;
@@ -656,6 +629,7 @@ def format_copy_preview_html(movie: str, rating: object, review_text: str) -> st
 
       const handler = (event) => {{
         event.clipboardData.setData("text/plain", clipboardPlainText);
+        event.clipboardData.setData("text/html", clipboardHtml);
         event.preventDefault();
       }};
 
@@ -706,6 +680,7 @@ def format_draft_markdown(
         [
             f"# {movie}",
             f"**Rating:** {rating_label}",
+            *([f"**Watched:** {parse_watched_date(notes)}"] if parse_watched_date(notes) else []),
             "## Markdown Review",
             markdown_review,
             "## Generated Review",
@@ -858,39 +833,35 @@ def revise_review_for_note_coverage(
     return call_llm(client, model, extra_headers, STYLE_ANALYSIS_PROMPT, prompt)
 
 
-def main() -> None:
-    """Command-line entry point for drafting a review from a notes file."""
+def generate_review(
+    movie: str,
+    rating: float | None,
+    notes: str,
+    reviews: list[dict],
+    feedback_path: Path = DEFAULT_FEEDBACK_PATH,
+    example_count: int | None = None,
+    feedback_count: int | None = None,
+) -> tuple[str, list[dict]]:
+    """Run the model workflow shared by the terminal and local web interface.
 
-    parser = argparse.ArgumentParser(description="Draft a Letterboxd review from notes.")
-    parser.add_argument("--movie", help="Optional title override. By default, read from notes.")
-    parser.add_argument("--notes", type=Path, required=True)
-    parser.add_argument("--reviews", type=Path, default=DEFAULT_REVIEWS_PATH)
-    parser.add_argument("--examples", type=int)
-    parser.add_argument("--feedback", type=Path, default=DEFAULT_FEEDBACK_PATH)
-    parser.add_argument("--feedback-examples", type=int)
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_DRAFTS_DIR)
-    args = parser.parse_args()
+    Credentials are loaded only when the user requests generation. Browsing or
+    editing the local library never needs a model connection.
+    """
 
-    # Read local inputs first. The notes file contains the user's current thoughts,
-    # while reviews.json contains older reviews to use as style references.
-    notes = args.notes.read_text(encoding="utf-8")
-    movie = args.movie or parse_movie_from_notes(notes)
-    rating = parse_rating_from_notes(notes)
-    reviews = load_reviews(args.reviews)
     # Load environment variables from .env if present. We do not read .env manually;
     # python-dotenv handles it and os.getenv reads only the requested names.
     load_dotenv()
     client, model, extra_headers = create_llm_client()
     # Command-line --examples wins when provided; otherwise use the environment
     # setting; otherwise fall back to 5.
-    example_count = args.examples or get_env_int("REVIEW_EXAMPLE_COUNT", 5)
+    example_count = example_count or get_env_int("REVIEW_EXAMPLE_COUNT", 5)
     examples = select_examples(reviews, notes, rating, example_count)
     feedback_count = (
-        args.feedback_examples
-        if args.feedback_examples is not None
+        feedback_count
+        if feedback_count is not None
         else get_env_int("REVIEW_FEEDBACK_EXAMPLE_COUNT", 3)
     )
-    feedback_records = load_feedback_records(args.feedback, feedback_count)
+    feedback_records = load_feedback_records(feedback_path, feedback_count)
     feedback_examples = format_feedback_examples(feedback_records)
     draft = draft_review(
         client,
@@ -912,6 +883,41 @@ def main() -> None:
         draft,
         feedback_examples,
     )
+    return final_review, examples
+
+
+def main() -> None:
+    """Command-line entry point for drafting a review from a notes file."""
+
+    parser = argparse.ArgumentParser(description="Draft a Letterboxd review from notes.")
+    parser.add_argument("--movie", help="Optional title override. By default, read from notes.")
+    parser.add_argument("--notes", type=Path, required=True)
+    parser.add_argument("--reviews", type=Path, default=DEFAULT_REVIEWS_PATH)
+    parser.add_argument("--watched", help="Watch date override in YYYY-MM-DD format.")
+    parser.add_argument("--diary", type=Path, default=DEFAULT_DIARY_PATH)
+    parser.add_argument("--examples", type=int)
+    parser.add_argument("--feedback", type=Path, default=DEFAULT_FEEDBACK_PATH)
+    parser.add_argument("--feedback-examples", type=int)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_DRAFTS_DIR)
+    args = parser.parse_args()
+
+    # Read local inputs first. The notes file contains the user's current thoughts,
+    # while reviews.json contains older reviews to use as style references.
+    notes = args.notes.read_text(encoding="utf-8")
+    movie = args.movie or parse_movie_from_notes(notes)
+    rating = parse_rating_from_notes(notes)
+    reviews = load_reviews(args.reviews)
+    # Resolve dates before any API call. Rewatches need an explicit date so a
+    # draft cannot silently be attached to the wrong viewing.
+    watched = resolve_watched_date(movie, notes, reviews, args.watched, args.diary)
+    notes = with_watched_date(notes, watched)
+    output_slug = movie_file_stem(movie, watched)
+    notes_path = args.notes.with_name(f"{output_slug}-notes.md")
+    if notes_path != args.notes and notes_path.exists():
+        raise FileExistsError(f"Notes already exist at {notes_path}; use that file or move it first.")
+    final_review, examples = generate_review(
+        movie, rating, notes, reviews, args.feedback, args.examples, args.feedback_examples,
+    )
     formatted_draft = format_draft_markdown(
         movie,
         rating,
@@ -922,13 +928,16 @@ def main() -> None:
     )
     copy_preview = format_copy_preview_html(movie, rating, final_review)
 
-    # Store the finished draft files with predictable names based on the movie title.
+    # Keep the notes and outputs together in filename order by watch date.
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    output_slug = slugify(movie)
     output_path = args.output_dir / f"{output_slug}-review.md"
     copy_preview_path = args.output_dir / f"{output_slug}-letterboxd-copy.html"
     output_path.write_text(formatted_draft + "\n", encoding="utf-8")
     copy_preview_path.write_text(copy_preview, encoding="utf-8")
+    args.notes.write_text(notes, encoding="utf-8")
+    if notes_path != args.notes:
+        args.notes.rename(notes_path)
+    print(f"Saved notes to {notes_path}")
     print(f"Wrote draft to {output_path}")
     print(f"Wrote Letterboxd copy preview to {copy_preview_path}")
 

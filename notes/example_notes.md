@@ -1,5 +1,6 @@
 # Movie Title
 
+Watched:
 Rating:
 
 Expectation / reason I watched:

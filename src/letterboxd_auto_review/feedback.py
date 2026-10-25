@@ -5,6 +5,8 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+
+from letterboxd_auto_review.movie_files import title_from_filename
 from uuid import uuid4
 
 
@@ -18,7 +20,7 @@ def parse_heading(markdown: str, path: Path) -> str:
     match = re.search(r"(?m)^#\s+(.+?)\s*$", markdown)
     if match:
         return match.group(1).strip()
-    return path.stem.removesuffix("-review").replace("-", " ").title() or "Review"
+    return title_from_filename(path)
 
 
 def parse_rating(markdown: str) -> str | None:
