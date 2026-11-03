@@ -4,9 +4,40 @@
 @media(max-width:760px){.topbar{height:76px;padding:0 20px}.brand{font-size:20px;gap:11px}.brand small{font-size:7px;letter-spacing:1.5px}.brand-mark{width:36px;height:36px;font-size:22px}.quiet{font-size:10px;padding:9px 10px}.layout{display:flex;flex-direction:column}.library{padding:24px 20px 0;border-right:0;border-bottom:1px solid var(--line)}.library-heading{margin-bottom:16px}.library h2{font-size:21px}.library .eyebrow{font-size:8px;margin-bottom:8px}#search{margin-bottom:12px}#movies{flex-direction:row;overflow-x:auto;padding:0 0 14px;gap:8px;scrollbar-width:thin}.movie{flex:0 0 175px;padding:12px 10px;background:#eeefe6;border-color:var(--line);align-items:flex-start;min-height:77px}.movie .number{display:none}.movie .movie-title{font-size:11px}.movie .movie-meta{font-size:9px}.movie .state-dot{margin-top:5px}.sort-label,.library-footer{display:none}main{padding:24px 17px}.workspace-top{margin-bottom:25px}.workspace-top .eyebrow{font-size:7px;letter-spacing:1px}.local-badge{font-size:8px}.page-heading{margin-bottom:20px}h1{font-size:31px}.draft-badge{font-size:7px;padding:6px}.metadata{grid-template-columns:1fr 1fr;padding:20px;gap:16px}.title-field{grid-column:1/-1}.metadata label{font-size:10px}.metadata input,.metadata select{font-size:16px}.tabbar{padding:0 20px;gap:22px}.tabbar button span{font-size:12px}.tabbar button{padding-top:16px;padding-bottom:14px}#save-state{font-size:9px}.editor-intro{padding:23px 20px 3px}.editor-intro h3{font-size:19px}.editor-intro p{font-size:11px}textarea{padding:20px;font-size:16px;min-height:420px}#review{font-size:18px}.actionbar{padding:16px;gap:8px;flex-wrap:wrap}.actionbar>div{gap:8px}.primary,.secondary,.text-button{font-size:11px;padding:11px 12px;min-height:44px}#review-actions{align-items:stretch}#review-actions>div{width:100%;justify-content:space-between}#copy{width:100%}.workspace-footer{font-size:10px;padding-top:17px}dialog{padding:30px 24px}dialog h2{font-size:27px}.page-heading .muted{font-size:10px}}
 @media(prefers-reduced-motion:reduce){.status.running::before{animation:none}}
 
-/* The review grows with its text; the page handles scrolling. */
-#review{min-height:0;overflow-y:hidden;resize:none}
+/* Let narrow columns shrink below the native date picker's preferred width. */
+.metadata label{min-width:0}
+.metadata input,.metadata select{min-width:0;max-width:100%;height:44px}
+
+/* Safari adds its own date layout; keep it inside the field and left aligned. */
+.metadata input[type=date]{appearance:none;-webkit-appearance:none;text-align:left}
+.metadata input[type=date]::-webkit-date-and-time-value{min-width:0;text-align:left}
+.metadata input[type=date]::-webkit-datetime-edit{padding:0}
+
+@media(max-width:760px){
+  .metadata{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+/* Both writing fields grow with their text; the page handles scrolling. */
+#notes,#review{overflow-y:hidden;resize:none}
+#review{min-height:0}
 
 /* Profile syncing sits next to the collection so it never interrupts writing. */
 .sync-card{margin:0 0 20px;padding:15px 13px;background:#eeefe6;border:1px solid var(--line);border-radius:5px}.sync-heading{display:flex;justify-content:space-between;align-items:center;gap:7px;margin-bottom:11px}.sync-heading .eyebrow{margin:0;font-size:8px}#sync-account{font-size:10px;color:#64775e;overflow-wrap:anywhere}.sync-card .secondary{width:100%;min-height:37px;font-size:11px;background:#f8f9f2}#sync-status{font-size:10px;line-height:1.7;margin:10px 0 0;color:#798572}#sync-status.error{color:#a24936}.sync-card form label{font-size:10px;display:block;margin-bottom:6px}.sync-card form>div{display:flex;gap:6px}.sync-card input{min-width:0;font-size:11px}.sync-card form .secondary{width:auto}.collection-tabs{display:flex;border-bottom:1px solid var(--line);margin:0 0 15px;gap:23px}.collection-tabs button{border:0;border-bottom:2px solid transparent;padding:0 0 11px;background:none;font-size:11px;color:#87907e}.collection-tabs button[aria-selected=true]{border-bottom-color:var(--green);color:var(--green);font-weight:600}.watched-hint{font-size:10px;line-height:1.8;color:#7b8872;padding:8px 4px}#movies{max-height:72vh;overflow-y:auto;scrollbar-width:thin}#movies .movie{flex-shrink:0}#sync-button:disabled{cursor:wait}
 @media(max-width:760px){.sync-card{padding:12px;margin:0 0 15px}.sync-heading{margin-bottom:8px}.sync-card .secondary{min-height:40px}.sync-card input{font-size:16px}.collection-tabs{margin-bottom:13px;gap:25px}.collection-tabs button{font-size:12px;padding-bottom:10px}.watched-hint{font-size:10px;margin-top:0}#movies{max-height:none;overflow-y:hidden}}
+
+/* Poster frames keep the library steady even when an image cannot be loaded. */
+.movie-poster,.heading-poster{display:grid;place-items:center;overflow:hidden;flex-shrink:0;aspect-ratio:2/3;background:#e1e5d9;color:#9aa58e;border:1px solid #20362f14;border-radius:3px;font:22px var(--serif);box-shadow:0 2px 5px #20362f12}
+.movie-poster{width:36px}
+.movie-poster img,.heading-poster img{display:block;width:100%;height:100%;object-fit:cover;grid-area:1/1}
+.movie-words{min-width:0;overflow-wrap:anywhere}
+.movie-heading{display:flex;align-items:center;gap:23px;min-width:0}
+.movie-heading>div:last-child{min-width:0;overflow-wrap:anywhere}
+.heading-poster{width:88px;font-size:32px}
+@media(max-width:760px){
+  .movie{flex-basis:215px;align-items:center;gap:10px}
+  .movie-poster{width:32px}
+  .movie-heading{gap:14px}
+  .heading-poster{width:60px;font-size:25px}
+  .page-heading{flex-wrap:wrap}
+  .page-heading h1{font-size:29px}
+}

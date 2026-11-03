@@ -176,17 +176,45 @@ test('input schedules autosave after a short pause', async () => {
 });
 
 
-test('review sizing collapses stale height before measuring text', () => {
+for (const fieldId of ['notes', 'review']) test(`${fieldId} sizing collapses stale height before measuring text`, () => {
   const run = editor();
   run(`
-    const review = $('review');
+    const review = $('${fieldId}');
     review.style.height = '2400px';
     Object.defineProperty(review, 'scrollHeight', {
       get() { return review.style.height === '0px' ? 320 : 2400; }
     });
-    resizeReview();
+    resizeEditors();
   `);
-  assert.equal(run("$('review').style.height"), '320px');
-  run(`Object.defineProperty($('review'), 'getClientRects', { value: () => [] }); resizeReview();`);
-  assert.equal(run("$('review').style.height"), '320px');
+  assert.equal(run(`$('${fieldId}').style.height`), '320px');
+  run(`Object.defineProperty($('${fieldId}'), 'getClientRects', { value: () => [] }); resizeEditors();`);
+  assert.equal(run(`$('${fieldId}').style.height`), '320px');
+});
+
+test('synced posters appear in both collections and the selected heading', async () => {
+  const run = editor();
+  run(`
+    const posterUrl = 'https://a.ltrbxd.com/resized/film-poster/1/example.jpg';
+    state.watched = [{ entry_id: 'viewing', title: 'The Fly', watched: '2026-10-23', poster_url: posterUrl }];
+    state.movies = [{ id: 'local', title: 'The Fly', watched: '2026-10-23' }];
+    displayItem({ ...state.movies[0], notes: '' });
+  `);
+  assert.equal(run("$('movies').children[0].children[0].children[0].src"), run('posterUrl'));
+  assert.equal(run("$('heading-poster').children[0].src"), run('posterUrl'));
+  run("collection('watched')");
+  assert.equal(run("$('movies').children[0].children[0].children[0].src"), run('posterUrl'));
+  // A failed request leaves the frame in place and never changes the editor.
+  run("$('heading-poster').children[0].listeners.error()");
+  assert.equal(run("$('heading-poster').children.length"), 0);
+  assert.equal(run("$('heading-poster').textContent"), '✦');
+  await run('newMovie()');
+  assert.equal(run("$('heading-poster').hidden"), true);
+});
+
+test('poster matching avoids ambiguous titles and different watch dates', () => {
+  const run = editor();
+  run(`state.watched = [{ title: 'The Fly', watched: '2026-10-23', poster_url: 'poster' }];`);
+  assert.equal(run("moviePoster({ title: 'The Fly', watched: '2026-10-22' })"), null);
+  run('state.watched.push({ ...state.watched[0] })');
+  assert.equal(run("moviePoster({ title: 'The Fly', watched: '2026-10-23' })"), null);
 });

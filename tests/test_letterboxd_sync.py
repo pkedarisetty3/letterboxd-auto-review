@@ -28,6 +28,27 @@ def feed(*items):
 
 
 class FeedTests(unittest.TestCase):
+    def test_uploaded_poster_artwork_is_accepted(self):
+        url = 'https://a.ltrbxd.com/resized/sm/upload/cj/ym/et/wn/BM_Eulogy-0-600-0-900-crop.jpg?v=24a81c55b6'
+        entries, skipped = parse_feed(feed(film_item().replace('poster.jpg', url)), 'tester')
+        self.assertEqual(entries[0]['poster_url'], url)
+        self.assertEqual(skipped, 0)
+
+    def test_poster_is_extracted_for_watches_and_reviews_without_review_html(self):
+        url = 'https://a.ltrbxd.com/resized/film-poster/1/2/3/example.jpg?v=1&x=2'
+        for kind in ['watch', 'review']:
+            content = film_item(kind=kind, review='<p>A review.</p>').replace('poster.jpg', url)
+            entries, _ = parse_feed(feed(content), 'tester')
+            self.assertEqual(entries[0]['poster_url'], url)
+            self.assertEqual(entries[0]['review'], 'A review.' if kind == 'review' else '')
+
+    def test_untrusted_images_do_not_discard_the_viewing(self):
+        for url in ['poster.jpg', 'http://a.ltrbxd.com/resized/film-poster/a.jpg',
+                    'https://example.com/poster.jpg', 'https://a.ltrbxd.com.evil.test/resized/film-poster/a.jpg']:
+            entries, skipped = parse_feed(feed(film_item().replace('poster.jpg', url)), 'tester')
+            self.assertIsNone(entries[0]['poster_url'])
+            self.assertEqual(skipped, 0)
+
     def test_watches_are_not_mistaken_for_reviews_and_lists_are_skipped(self):
         entries, skipped = parse_feed(feed(film_item(), '<item><title>My list</title></item>'), 'tester')
         self.assertEqual(len(entries), 1)
@@ -76,6 +97,11 @@ class FeedTests(unittest.TestCase):
 
 
 class MergeTests(unittest.TestCase):
+    def test_missing_poster_keeps_previous_artwork(self):
+        url = 'https://a.ltrbxd.com/resized/film-poster/1/example.jpg'
+        merged, _ = merge_entries([{**self.entry, 'poster_url': url}], [self.entry])
+        self.assertEqual(merged[0]['poster_url'], url)
+
     def setUp(self):
         self.entry = parse_feed(feed(film_item(kind='review', rating='4', review='<p>Good ending.</p>')), 'tester')[0][0]
 
@@ -115,6 +141,39 @@ class MergeTests(unittest.TestCase):
 
 
 class SyncTests(unittest.TestCase):
+    def test_same_day_cached_viewings_follow_entry_sequence_not_title(self):
+        # These entries were already cached before the sorting fix. A refresh
+        # should fix their order without requiring another network request.
+        ready, scream = parse_feed(feed(
+            film_item(title='Ready or Not', slug='ready-or-not-2019'),
+            film_item(title='Scream 3', slug='scream-3'),
+        ), 'tester')[0]
+        ready['rss_guid'] = 'letterboxd-watch-1564960640'
+        scream['rss_guid'] = 'letterboxd-watch-1564809813'
+        (self.root / 'data/diary.json').write_text(json.dumps([ready, scream]))
+        self.assertEqual([row['title'] for row in self.sync.watched()], ['Ready or Not', 'Scream 3'])
+
+    def test_same_day_order_survives_incremental_sync_and_review_update(self):
+        scream = film_item(title='Scream 3', slug='scream-3').replace(
+            'letterboxd-watch-123', 'letterboxd-watch-99')
+        ready = film_item(title='Ready or Not', slug='ready-or-not-2019').replace(
+            'letterboxd-watch-123', 'letterboxd-watch-100')
+        self.run_sync(feed(scream))
+        self.run_sync(feed(ready, scream))
+        self.run_sync(feed(ready.replace('letterboxd-watch-', 'letterboxd-review-'), scream))
+        self.run_sync(feed())
+        self.assertEqual([row['title'] for row in self.sync.watched()][:2], ['Ready or Not', 'Scream 3'])
+
+    def test_export_only_same_day_viewings_keep_reverse_csv_order(self):
+        export = self.root / 'data/raw/letterboxd_export/diary.csv'
+        with export.open('a') as handle:
+            handle.write('2026-10-31,Scream 3,2000,https://boxd.it/scream,,,,2026-10-30\n')
+            handle.write('2026-10-31,Ready or Not,2019,https://boxd.it/ready,,,,2026-10-30\n')
+        before = self.sync.watched()
+        self.assertEqual([row['title'] for row in before][:2], ['Ready or Not', 'Scream 3'])
+        self.run_sync(feed())
+        self.assertEqual(self.sync.watched(), before)
+
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory()
         self.addCleanup(self.folder.cleanup)
@@ -142,11 +201,13 @@ class SyncTests(unittest.TestCase):
             return self.wait()
 
     def test_initial_merge_repeat_sync_and_rolling_window_keep_history(self):
-        content = feed(film_item(kind='review', review='<p>A new review.</p>'))
+        url = 'https://a.ltrbxd.com/resized/film-poster/1/example.jpg'
+        content = feed(film_item(kind='review', review='<p>A new review.</p>').replace('poster.jpg', url))
         status = self.run_sync(content)
         self.assertEqual(status['state'], 'done')
         self.assertEqual(status['counts']['viewings_added'], 1)
         self.assertEqual(len(load_diary(self.root)), 2)
+        self.assertEqual(self.sync.watched()[0]['poster_url'], url)
         self.assertEqual(len(json.loads((self.root / 'data/reviews.json').read_text())), 2)
         self.assertEqual(json.loads((self.root / 'data/backups/before-letterboxd-sync-reviews.json').read_text()), self.old_reviews)
         repeated = self.run_sync(content)
@@ -155,6 +216,7 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(repeated['counts']['reviews_updated'], 0)
         self.run_sync(feed())
         self.assertEqual(len(load_diary(self.root)), 2)
+        self.assertEqual(self.sync.watched()[0]['poster_url'], url)
         self.assertEqual((self.root / 'notes/private-notes.md').read_text(), 'My untouched notes.')
         self.assertEqual(LetterboxdSync(self.root).snapshot()['username'], 'tester')
 

@@ -118,14 +118,16 @@ function updateButtons() {
   $('save-state').textContent = saveError || (saving ? 'Saving…' : (dirty() ? 'Waiting to save…' : (state.item ? 'All changes saved' : 'Edits save automatically')));
 }
 
-function resizeReview() {
-  const review = $('review');
-  // Hidden tabs cannot be measured. Size the review after it becomes visible.
-  if (!review.getClientRects().length) return;
-  // Collapse before measuring: an automatic height can retain extra space in
-  // Safari. scrollHeight then gives just the text height plus normal padding.
-  review.style.height = '0px';
-  review.style.height = `${review.scrollHeight}px`;
+function resizeEditors() {
+  // Both writing fields grow with their text, leaving scrolling to the page.
+  ['notes', 'review'].forEach((id) => {
+    const field = $(id);
+    // Hidden tabs cannot be measured; switching tabs sizes the visible field.
+    if (!field.getClientRects().length) return;
+    // Collapse first so deleting text also removes extra height in Safari.
+    field.style.height = '0px';
+    field.style.height = `${field.scrollHeight}px`;
+  });
 }
 
 function tab(name) {
@@ -134,7 +136,39 @@ function tab(name) {
   $('review-panel').hidden = notes;
   $('notes-tab').setAttribute('aria-selected', String(notes));
   $('review-tab').setAttribute('aria-selected', String(!notes));
-  resizeReview();
+  resizeEditors();
+}
+
+function moviePoster(movie) {
+  // Local writing shares artwork only with a uniquely matched diary viewing.
+  if (!movie) return null;
+  if (movie.poster_url) return movie.poster_url;
+  const matches = state.watched.filter((entry) => entry.title.toLocaleLowerCase() === movie.title.toLocaleLowerCase()
+    && entry.watched === movie.watched);
+  return matches.length === 1 ? matches[0].poster_url : null;
+}
+
+function fillPoster(container, movie, lazy = true) {
+  // Keep a quiet, fixed-size placeholder when offline or artwork is unavailable.
+  container.replaceChildren();
+  container.textContent = '✦';
+  container.setAttribute('aria-hidden', 'true');
+  const url = moviePoster(movie);
+  if (!url) return;
+  const image = document.createElement('img');
+  image.alt = '';
+  image.loading = lazy ? 'lazy' : 'eager';
+  image.referrerPolicy = 'no-referrer';
+  image.addEventListener('error', () => { container.replaceChildren(); container.textContent = '✦'; });
+  image.src = url;
+  container.textContent = '';
+  container.append(image);
+}
+
+function renderHeadingPoster() {
+  const movie = state.item || state.watched.find((entry) => entry.entry_id === state.watchedEntryId);
+  $('heading-poster').hidden = !movie;
+  fillPoster($('heading-poster'), movie, false);
 }
 
 function renderLibrary() {
@@ -144,16 +178,17 @@ function renderLibrary() {
   const source = state.collection === 'watched' ? state.watched : state.movies;
   $('count').textContent = ` ${source.length}`;
   $('watched-hint').hidden = state.collection !== 'watched';
-  source.filter((movie) => movie.title.toLocaleLowerCase().includes(query)).forEach((movie, index) => {
+  source.filter((movie) => movie.title.toLocaleLowerCase().includes(query)).forEach((movie) => {
     const button = document.createElement('button');
     const localId = state.collection === 'watched' ? movie.local_id : movie.id;
     const selected = state.collection === 'watched' ? isCurrentViewing(movie) : Boolean(localId && state.item?.id === localId);
     button.className = `movie${selected ? ' active' : ''}`;
     button.setAttribute('aria-current', String(selected));
-    const number = document.createElement('span');
-    number.className = 'number';
-    number.textContent = String(index + 1).padStart(2, '0');
+    const poster = document.createElement('span');
+    poster.className = 'movie-poster';
+    fillPoster(poster, movie);
     const words = document.createElement('span');
+    words.className = 'movie-words';
     const title = document.createElement('span');
     title.className = 'movie-title';
     title.textContent = `${movie.title}${state.collection === 'watched' && movie.year ? ` (${movie.year})` : ''}`;
@@ -165,7 +200,7 @@ function renderLibrary() {
     const hasWriting = state.collection === 'watched' ? Boolean(localId) : movie.has_draft;
     dot.className = `state-dot${hasWriting ? ' drafted' : ''}`;
     dot.title = state.collection === 'watched' ? (hasWriting ? 'Writing started' : 'Start notes') : (movie.has_draft ? 'Draft ready' : 'Notes saved');
-    button.append(number, words, dot);
+    button.append(poster, words, dot);
     button.addEventListener('click', () => action(() => state.collection === 'watched' ? startFromWatched(movie) : openMovie(movie.id)));
     list.append(button);
   });
@@ -175,6 +210,7 @@ function renderLibrary() {
     empty.textContent = query ? 'No matching movies.' : (state.collection === 'watched' ? 'Sync Letterboxd to bring in recent viewings.' : 'Your first review belongs here.');
     list.append(empty);
   }
+  renderHeadingPoster();
 }
 
 async function refreshLibrary() {
@@ -286,7 +322,7 @@ function displayItem(item) {
   $('review-actions').hidden = !item?.has_draft;
   $('no-review').hidden = Boolean(item?.has_draft);
   rememberSaved();
-  resizeReview();
+  resizeEditors();
   updateButtons();
   renderLibrary();
 }
@@ -475,8 +511,8 @@ $('writing-list-tab').addEventListener('click', () => collection('writing'));
 $('watched-list-tab').addEventListener('click', () => collection('watched'));
 $('sync-button').addEventListener('click', () => action(() => syncLetterboxd()));
 $('sync-connect').addEventListener('submit', (event) => { event.preventDefault(); action(() => syncLetterboxd($('sync-username').value.trim())); });
-['title', 'watched', 'rating', 'notes'].forEach((id) => $(id).addEventListener('input', scheduleSave));
-$('review').addEventListener('input', () => { resizeReview(); scheduleSave(); });
+['title', 'watched', 'rating'].forEach((id) => $(id).addEventListener('input', scheduleSave));
+['notes', 'review'].forEach((id) => $(id).addEventListener('input', () => { resizeEditors(); scheduleSave(); }));
 $('generate').addEventListener('click', () => action(generate));
 $('copy').addEventListener('click', () => action(copyReview));
 $('feedback').addEventListener('click', () => action(async () => { await saveReview(); const result = await api('feedback', identity()); status(result.message); }));
@@ -490,6 +526,6 @@ $('pair-form').addEventListener('submit', async (event) => {
   catch (error) { $('pair-error').textContent = error.message; }
 });
 // Reflow the text when the window width or phone orientation changes.
-window.addEventListener('resize', resizeReview);
+window.addEventListener('resize', resizeEditors);
 window.addEventListener('beforeunload', (event) => { if (dirty()) { event.preventDefault(); event.returnValue = ''; } });
 start();

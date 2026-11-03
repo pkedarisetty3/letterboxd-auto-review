@@ -81,6 +81,12 @@ the historical baseline; a new export may still be needed to fill a long gap or
 reconcile older changes. When offline, the app keeps using the last saved history.
 Syncing does not call the review-generation model or use paid AI credits.
 
+Movie posters from the feed appear beside library titles and the selected movie's
+heading after syncing. This uses the existing connection, with no extra API key.
+Older export-only entries show a placeholder until their artwork arrives through
+RSS. Poster URLs are saved with the diary; loading the images requires a connection
+to Letterboxd's image service. Missing images fall back to a quiet placeholder.
+
 ### Use Your Phone
 
 1. Start the app on your laptop and keep the laptop awake.

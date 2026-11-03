@@ -26,6 +26,32 @@ MAX_FEED_BYTES = 2_000_000
 LB = "{https://letterboxd.com}"
 
 
+def poster_url(value: str) -> str | None:
+    """Only display HTTPS images from Letterboxd's poster image service."""
+
+    try:
+        parsed = urlsplit(value)
+        # Some titles use uploaded artwork rather than the numbered poster path.
+        if (parsed.scheme == "https" and parsed.netloc.lower() == "a.ltrbxd.com"
+                and parsed.path.startswith(("/resized/film-poster/", "/resized/sm/upload/"))):
+            return value
+    except ValueError:
+        pass
+    return None
+
+
+class PosterImage(HTMLParser):
+    """Read the feed's first poster without copying HTML into the app."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.url = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "img" and self.url is None:
+            self.url = poster_url(dict(attrs).get("src") or "")
+
+
 def write_json(path: Path, value) -> None:
     """Write complete JSON before replacing the previous local copy."""
 
@@ -138,6 +164,8 @@ def parse_feed(content: bytes, username: str) -> tuple[list[dict], int]:
             if len(movie) > 200 or "\n" in movie or "\r" in movie:
                 raise ValueError("Invalid title")
             guid = item.findtext("guid", "")
+            poster = PosterImage()
+            poster.feed(item.findtext("description", ""))
             review = ""
             if guid.startswith("letterboxd-review-"):
                 parser = ReviewText()
@@ -150,7 +178,7 @@ def parse_feed(content: bytes, username: str) -> tuple[list[dict], int]:
                             "rss_entry_url": link, "rss_guid": guid,
                             "watched_date": watched, "logged_date": logged,
                             "rating": rating, "rewatch": item.findtext(LB + "rewatch", "").casefold() == "yes",
-                            "review": review, "tags": []})
+                            "review": review, "tags": [], "poster_url": poster.url})
         except (ValueError, TypeError, OverflowError):
             skipped += 1
     if skipped and not entries:
@@ -244,6 +272,8 @@ def merge_entries(existing: list[dict], incoming: list[dict]) -> tuple[list[dict
             index = candidates[0]
             # RSS does not supply tags. Preserve the export's richer metadata.
             updated = {**result[index], **entry, "tags": result[index].get("tags", [])}
+            # A temporarily missing image should not erase a previously found poster.
+            updated["poster_url"] = entry.get("poster_url") or result[index].get("poster_url")
             if updated != result[index]:
                 result[index] = updated
                 counts["updated"] += 1
@@ -321,11 +351,25 @@ class LetterboxdSync:
         """Expose dated viewings for the UI, without returning stored review bodies."""
 
         items = []
-        for index, row in enumerate(load_diary(self.root)):
+        records = load_diary(self.root)
+
+        def diary_order(index_and_row):
+            """Keep same-day viewings in logging order instead of title order."""
+
+            index, row = index_and_row
+            # RSS watch/review GUIDs contain the diary entry's numeric sequence.
+            # Unlike an item's position in a rolling feed, this survives later
+            # syncs. Export-only rows keep their original oldest-first CSV order.
+            sequence = re.fullmatch(r"letterboxd-(?:watch|review)-(\d+)", row.get("rss_guid", ""))
+            return (row.get("watched_date") or "", row.get("logged_date") or "",
+                    int(sequence[1]) if sequence else 0, index)
+
+        for index, row in sorted(enumerate(records), key=diary_order, reverse=True):
             if not row.get("watched_date") or not row.get("movie"):
                 continue
             identity = row.get("rss_entry_url") or row.get("letterboxd_uri") or f"{viewing_key(row)}:{index}"
             items.append({"entry_id": hashlib.sha256(identity.encode()).hexdigest()[:24],
                           "title": row["movie"], "year": row.get("year"), "watched": row["watched_date"],
-                          "rating": row.get("rating"), "rewatch": row.get("rewatch", False)})
-        return sorted(items, key=lambda item: (item["watched"], item["title"]), reverse=True)
+                          "rating": row.get("rating"), "rewatch": row.get("rewatch", False),
+                          "poster_url": poster_url(row.get("poster_url") or "")})
+        return items
